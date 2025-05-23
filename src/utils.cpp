@@ -2,7 +2,7 @@
 using namespace std;
 
 RegEntry::RegEntry(){}
-RegEntry::RegEntry(std::unordered_map<std::string,u_int32_t> registerToValueMapping){
+RegEntry::RegEntry(std::map<std::string,u_int32_t> registerToValueMapping){
     this->registerToValueMapping=registerToValueMapping;
     this->register_to_int_mapping={};
     for(int i=0;i<32;i++){
@@ -35,11 +35,11 @@ RegEntry::RegEntry(std::unordered_map<std::string,u_int32_t> registerToValueMapp
     }
 }
 DMEM::DMEM(){}
-DMEM::DMEM(std::unordered_map<u_int32_t,u_int32_t>addressToDataMapping){
+DMEM::DMEM(map<u_int32_t,u_int32_t>addressToDataMapping){
     this->addressToDataMapping=addressToDataMapping;
 }
 Adder::Adder(){}
-IMEM::IMEM(unordered_map<u_int32_t,u_int32_t>addressToTextInstructionMapping){
+IMEM::IMEM(map<u_int32_t,u_int32_t>addressToTextInstructionMapping){
     this->addressToTextInstructionMapping=addressToTextInstructionMapping;
 }
 IMEM::IMEM(){}
@@ -72,22 +72,42 @@ void RegEntry::readRegistors(){
 }
 
 void RegEntry::writeRegistor(){
-    registerToValueMapping[int_to_register_mapping[inputs[2]]]=inputs[3];
+    if(controlInputSignal==1){
+        registerToValueMapping[int_to_register_mapping[inputs[2]]]=inputs[3];
+    }
 }
 
 void BranchComparator::compare(){
-    if((int32_t) inputs[0]>(int32_t) inputs[1]){
-        controlOutputSignals[0]=0;
-        controlOutputSignals[1]=0;
-    }
-    else if(inputs[0]==inputs[1]){
-        controlOutputSignals[0]=1;
-        controlOutputSignals[1]=0;
-    }
-    else if((int32_t) inputs[0]<(int32_t) inputs[1]){
-        controlOutputSignals[0]=0;
-        controlOutputSignals[1]=1;
-    }
+    //signed
+    if(controlInputSignal==0){
+        if((int32_t) inputs[0]>(int32_t) inputs[1]){
+            controlOutputSignals[0]=0;
+            controlOutputSignals[1]=0;
+        }
+        else if(inputs[0]==inputs[1]){
+            controlOutputSignals[0]=1;
+            controlOutputSignals[1]=0;
+        }
+        else if((int32_t) inputs[0]<(int32_t) inputs[1]){
+            controlOutputSignals[0]=0;
+            controlOutputSignals[1]=1;
+        }
+    }   
+    //unsigned
+    else if(controlInputSignal==1){
+        if(inputs[0]>inputs[1]){
+            controlOutputSignals[0]=0;
+            controlOutputSignals[1]=0;
+        }
+        else if(inputs[0]==inputs[1]){
+            controlOutputSignals[0]=1;
+            controlOutputSignals[1]=0;
+        }
+        else if(inputs[0]<inputs[1]){
+            controlOutputSignals[0]=0;
+            controlOutputSignals[1]=1;
+        }
+    }   
 }
 
 void ALU::compute(){
@@ -362,5 +382,41 @@ Instruction ControlLogic::findInstruction(u_int32_t inst){
     }
     else if(opcode==0b1101111){
         return JAL;
+    }
+}
+
+// BEQ,BNE,BGE,BLT,BLTU,BGEU,
+void ControlLogic::PCselModify(Instruction instruction,twoMultiplexer m1){
+    if(instruction==BEQ){
+        if(brEq==1){
+            m1.controlInputSignal=1;
+        }
+        else{
+            m1.controlInputSignal=0;
+        }
+    }
+    else if(instruction==BNE){
+        if(brEq==0){
+            m1.controlInputSignal=1;
+        }
+        else{
+            m1.controlInputSignal=0;
+        }
+    }
+    else if(instruction==BGE||instruction==BGEU){
+        if(brEq==1 && brLt==0){
+            m1.controlInputSignal=1;
+        }
+        else{
+            m1.controlInputSignal=0;
+        }
+    }
+    else if(instruction==BLT||instruction==BLTU){
+        if(brLt==1){
+            m1.controlInputSignal=1;
+        }
+        else{
+            m1.controlInputSignal=0;
+        }
     }
 }

@@ -54,6 +54,7 @@ void Executor::inputFileParser(){
     ifstream file(inputFilePath);  
     string line,current;
     vector<string> tokens;
+    int i=0;
     //text instructions
     while (getline(file, line)) {
         tokens=vector<string>();
@@ -70,6 +71,9 @@ void Executor::inputFileParser(){
         }
         for(char ch:line){
             if(ch==' ' && !current.empty()){
+                if(i==0){
+                    pc=stoul(current,nullptr,16);
+                }
                 tokens.emplace_back(current);
                 current.clear();
                 continue;
@@ -84,6 +88,7 @@ void Executor::inputFileParser(){
             current.clear();
         }
         imem.addressToTextInstructionMapping[stoul(tokens[0],nullptr,16)]=stoul(tokens[1],nullptr,16);
+        i++;
     }
     //data
     while(getline(file,line)){
@@ -344,13 +349,77 @@ void Executor::applyControlLogic(){
     m4.controlInputSignal=control_logic.WBsel;
 }
 
+void Executor::branchInfoToControlLogic(){
+    control_logic.brEq=branch_comp.controlOutputSignals[0];
+    control_logic.brLt=branch_comp.controlOutputSignals[1];
+}
+
+void Executor::printState(){
+    cout<<"DMEM:"<<endl;
+    for(pair p:dmem.addressToDataMapping){
+        cout<<"0x"<<hex<<p.first<<":"<<"0x"<<hex<<p.second<<endl;
+    }
+    cout<<"======================================================"<<endl;
+    cout<<"Registors:"<<endl;
+    for(pair p:reg_entry.registerToValueMapping){
+        cout<<p.first<<":"<<"0x"<<hex<<p.second<<endl;
+    }
+    cout<<"======================================================"<<endl;
+}
+
 void Executor::execueteALL(){
+    printState();
     //OUTPUT->changes in dmem,imem and reg_entry||outputDataLines
     while(pc!=endInstruction){
         execueteInstruction();
+        printState();
     }
 }
 
 void Executor::execueteInstruction(){
-
+    inputFileParser();
+    Instruction instruction=control_logic.findInstruction(imem.addressToTextInstructionMapping[pc]);
+    u_int32_t inst=imem.addressToTextInstructionMapping[pc];
+    setupControlLogic(instruction);
+    applyControlLogic();
+    //main logic
+    adder.inputs[0]=4;
+    adder.inputs[1]=pc;
+    adder.add();
+    m1.inputs[0]=adder.output;
+    m4.inputs[2]=adder.output;
+    m2.inputs[1]=pc;
+    imem.inputs[0]=pc;
+    imem.fetch_instruction();
+    reg_entry.inputs[0]=(imem.output&0b11111<<15)>>15; //addrA
+    reg_entry.inputs[1]=(imem.output&0b11111<<20)>>20; //addrB
+    reg_entry.inputs[2]=(imem.output&0b11111<<7)>>7; //addrD
+    reg_entry.inputs[3]=0; //initialise
+    reg_entry.readRegistors();
+    branch_comp.inputs[0]=reg_entry.outputs[0];
+    branch_comp.inputs[1]=reg_entry.outputs[1];
+    branch_comp.compare();
+    branchInfoToControlLogic();
+    control_logic.PCselModify(instruction,m1);
+    m2.inputs[0]=reg_entry.inputs[0];
+    m3.inputs[0]=reg_entry.outputs[1];
+    dmem.inputs[1]=reg_entry.outputs[1];
+    imm_gen.inputs[0]=imem.output;
+    imm_gen.generate();
+    m3.inputs[1]=imm_gen.output;
+    m2.decide();
+    m3.decide();
+    alu.inputs[0]=m2.output;
+    alu.inputs[1]=m3.output;
+    alu.compute();
+    m4.inputs[1]=alu.output;
+    dmem.inputs[0]=alu.output;
+    dmem.readMemory();
+    dmem.writeMemory();
+    m4.inputs[0]=dmem.output;
+    m4.decide();
+    reg_entry.inputs[3]=m4.output;
+    reg_entry.writeRegistor();
+    m1.decide();
+    pc=m1.output;
 }

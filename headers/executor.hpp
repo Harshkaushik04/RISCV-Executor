@@ -24,7 +24,9 @@ public:
     void inputFileParser();
     void setupControlLogic(Instruction);
     void applyControlLogic();
+    void branchInfoToControlLogic();
     void execueteInstruction();
     void execueteALL();
+    void printState();
     Executor(std::string);
 };

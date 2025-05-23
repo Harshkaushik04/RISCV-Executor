@@ -1,4 +1,4 @@
-#include<unordered_map>
+#include<map>
 #include<iostream>
 #include<iomanip>
 #include<fstream>
@@ -35,9 +35,9 @@ class IMEM{
 public:
     u_int32_t inputs[1]; //pc
     u_int32_t output; //instruction
-    std::unordered_map<u_int32_t,u_int32_t> addressToTextInstructionMapping;
+    std::map<u_int32_t,u_int32_t> addressToTextInstructionMapping;
     void fetch_instruction();
-    IMEM(std::unordered_map<u_int32_t,u_int32_t>);
+    IMEM(std::map<u_int32_t,u_int32_t>);
     IMEM();
 };
 
@@ -64,13 +64,13 @@ public:
     u_int32_t inputs[4]; // addrA,addrB,addrD,dataD
     u_int32_t outputs[2]; //dataA,dataB
     int controlInputSignal;
-    std::unordered_map<std::string,u_int32_t> registerToValueMapping;
+    std::map<std::string,u_int32_t> registerToValueMapping;
     void readRegistors();
     void writeRegistor();
-    std::unordered_map<std::string,int> register_to_int_mapping;
-    std::unordered_map<int,std::string> int_to_register_mapping;
+    std::map<std::string,int> register_to_int_mapping;
+    std::map<int,std::string> int_to_register_mapping;
     RegEntry();
-    RegEntry(std::unordered_map<std::string,u_int32_t>);
+    RegEntry(std::map<std::string,u_int32_t>);
 };
 
 class BranchComparator{
@@ -96,11 +96,11 @@ public:
     u_int32_t inputs[2]; //addr,data
     std::string controlInputSignal;
     u_int32_t output;
-    std::unordered_map<u_int32_t,u_int32_t> addressToDataMapping;
+    std::map<u_int32_t,u_int32_t> addressToDataMapping;
     void readMemory();
     void writeMemory();
     DMEM();
-    DMEM(std::unordered_map<u_int32_t,u_int32_t>);
+    DMEM(std::map<u_int32_t,u_int32_t>);
 };
 
 class ImmGenerator{
@@ -127,5 +127,6 @@ public:
     std::string MemRW;
     int WBsel;
     Instruction findInstruction(u_int32_t);
+    void PCselModify(Instruction,twoMultiplexer);
     ControlLogic();
 };
