@@ -8,6 +8,21 @@
 #include<bitset>
 #include<algorithm>
 
+
+enum FormatType{
+    Rformat,Iformat,Sformat,
+    Bformat,Uformat,Jformat
+};
+
+enum Instruction{
+    ADD,SUB,SLL,SLT,SLTU,XOR,SRL,SRA,OR,AND,MUL,DIV,REM,
+    ADDI,SLTI,SLTIU,XORI,ORI,ANDI,SLLI,SRLI,SRAI,LD,LB,LH,LW,LBU,LHU,
+    SB,SH,SW,SD,
+    BEQ,BNE,BGE,BLT,BLTU,BGEU,
+    LUI,AUIPC,
+    JAL,JALR
+};
+
 class Adder{
 public:
     u_int32_t inputs[2]; //4,pc
@@ -52,6 +67,8 @@ public:
     std::unordered_map<std::string,u_int32_t> registerToValueMapping;
     void readRegistors();
     void writeRegistor();
+    std::unordered_map<std::string,int> register_to_int_mapping;
+    std::unordered_map<int,std::string> int_to_register_mapping;
     RegEntry();
     RegEntry(std::unordered_map<std::string,u_int32_t>);
 };
@@ -59,8 +76,9 @@ public:
 class BranchComparator{
 public:
     u_int32_t inputs[2]; //dataA,dataB
-    int controlInputSignal;
-    int* controlOutputSignals;
+    int controlInputSignal; //Brun
+    int controlOutputSignals[2]; //Breq,Brlt
+    void compare();
     BranchComparator();
 };
 
@@ -75,7 +93,7 @@ public:
 
 class DMEM{
 public:
-    u_int32_t inputs[2];
+    u_int32_t inputs[2]; //addr,data
     std::string controlInputSignal;
     u_int32_t output;
     std::unordered_map<u_int32_t,u_int32_t> addressToDataMapping;
@@ -87,7 +105,7 @@ public:
 
 class ImmGenerator{
 public:
-    u_int32_t inputs[1];
+    u_int32_t inputs[1]; //instruction
     std::string controlInputSignal;
     u_int32_t output;
     void generate();
@@ -108,5 +126,6 @@ public:
     std::string ALUsel;
     std::string MemRW;
     int WBsel;
+    Instruction findInstruction(u_int32_t);
     ControlLogic();
 };

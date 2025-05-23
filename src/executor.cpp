@@ -30,76 +30,22 @@ vector<string> string_to_hex_bytes(string input) {
 
 Executor::Executor(string inputFilePath){
     this->inputFilePath=inputFilePath;
-    std::unordered_map<u_int32_t,u_int32_t> addressToTextInstructionMapping={};
-    std::unordered_map<u_int32_t,u_int32_t> addressToDataMapping={};
-    std::unordered_map<std::string,u_int32_t> registorToValueMapping={};
-    std::vector<std::string> outputDataLines={};
-    //initialise
-    for(int i=0;i<32;i++){
-        registorToValueMapping["x"+to_string(i)]=0;
-    }
-    for(int i=0;i<3;i++){
-        registorToValueMapping["t"+to_string(i)]=0;
-    }
-    for(int i=0;i<2;i++){
-        registorToValueMapping["s"+to_string(i)]=0;
-    }
-    for(int i=0;i<8;i++){
-        registorToValueMapping["a"+to_string(i)]=0;
-    }
-    for(int i=2;i<12;i++){
-        registorToValueMapping["s"+to_string(i)]=0;
-    }
-    for(int i=3;i<7;i++){
-        registorToValueMapping["t"+to_string(i)]=0;
-    }
-    registorToValueMapping["zero"]=0;
-    registorToValueMapping["ra"]=0;
-    registorToValueMapping["sp"]=0;
-    registorToValueMapping["gp"]=0;
-    registorToValueMapping["tp"]=0;
-    registorToValueMapping["fp"]=0;
+    endInstruction=0; //initialise
 
     //architecture
     twoMultiplexer m1=twoMultiplexer();
     u_int32_t pc=0x0;
     Adder adder=Adder();
-    IMEM imem=IMEM(addressToTextInstructionMapping);
-    RegEntry reg_entry=RegEntry(registorToValueMapping);
+    IMEM imem=IMEM();
+    RegEntry reg_entry=RegEntry();
     ImmGenerator imm_gen=ImmGenerator();
     BranchComparator branch_comp=BranchComparator();
     twoMultiplexer m2=twoMultiplexer();
     twoMultiplexer m3=twoMultiplexer();
     ALU alu=ALU();
-    DMEM dmem=DMEM(addressToDataMapping);
+    DMEM dmem=DMEM();
     threeMultiplexer m4=threeMultiplexer();
     ControlLogic control_logic=ControlLogic();
-
-    this->register_to_int_mapping={};
-    for(int i=0;i<32;i++){
-        register_to_int_mapping["x"+to_string(i)]=i;
-    }
-    for(int i=0;i<3;i++){
-        register_to_int_mapping["t"+to_string(i)]=i+5;
-    }
-    for(int i=0;i<2;i++){
-        register_to_int_mapping["s"+to_string(i)]=i+8;
-    }
-    for(int i=0;i<8;i++){
-        register_to_int_mapping["a"+to_string(i)]=i+10;
-    }
-    for(int i=2;i<12;i++){
-        register_to_int_mapping["s"+to_string(i)]=i+16;
-    }
-    for(int i=3;i<7;i++){
-        register_to_int_mapping["t"+to_string(i)]=i+25;
-    }
-    register_to_int_mapping["zero"]=0;
-    register_to_int_mapping["ra"]=1;
-    register_to_int_mapping["sp"]=2;
-    register_to_int_mapping["gp"]=3;
-    register_to_int_mapping["tp"]=4;
-    register_to_int_mapping["fp"]=8;
 }
 
 void Executor::inputFileParser(){
@@ -112,6 +58,14 @@ void Executor::inputFileParser(){
     while (getline(file, line)) {
         tokens=vector<string>();
         if(line=="END"){
+            for(char ch:line){
+                if(ch==' ' && !current.empty()){
+                    endInstruction=stoul(current,nullptr,16);
+                    current.clear();
+                    break;
+                }
+                current+=ch;
+            }
             break;
         }
         for(char ch:line){
@@ -129,7 +83,7 @@ void Executor::inputFileParser(){
             tokens.emplace_back(current);
             current.clear();
         }
-        addressToTextInstructionMapping[stoul(tokens[0],nullptr,16)]=stoul(tokens[1],nullptr,16);
+        imem.addressToTextInstructionMapping[stoul(tokens[0],nullptr,16)]=stoul(tokens[1],nullptr,16);
     }
     //data
     while(getline(file,line)){
@@ -146,14 +100,257 @@ void Executor::inputFileParser(){
             tokens.emplace_back(current);
             current.clear();
         }
-        addressToDataMapping[stoul(tokens[0],nullptr,16)]=stoul(tokens[1],nullptr,16);
+        dmem.addressToDataMapping[stoul(tokens[0],nullptr,16)]=stoul(tokens[1],nullptr,16);
     }
 }
 
-void Executor::execuete(){
-    //INPUT->addressToTextInstructionMapping,addressToDataMapping,registorToValueMapping
-    //OUTPUT->registorToValueMapping,outputDataLines
-    imem.addressToTextInstructionMapping=addressToDataMapping;
-    dmem.addressToDataMapping=addressToDataMapping;
-    
+void Executor::setupControlLogic(Instruction instruction){
+    control_logic.instruction=instruction;
+    //pcsel is function of brun,breq,brlt , so would be set later in logic
+    //R format
+    if(instruction==ADD||instruction==SUB||instruction==SLL||instruction==SLT||instruction==SLTU||
+        instruction==XOR||instruction==SRL||instruction==SRA||instruction==OR||instruction==AND||
+        instruction==MUL||instruction==DIV||instruction==REM){
+            // ADD,SUB,SLL,SLT,SLTU,XOR,SRL,SRA,OR,AND,MUL,DIV,REM,
+            control_logic.pcSel=0;
+            control_logic.immSel="I"; //dont care(so just initialising)
+            control_logic.regWEn=1;
+            control_logic.brUn=0; //dont care
+            control_logic.brEq=0; //dont care
+            control_logic.brLt=0; //dont care
+            control_logic.Bsel=0;
+            control_logic.Asel=0;
+            control_logic.MemRW="read";
+            control_logic.WBsel=1;
+            if(instruction==ADD){
+                control_logic.ALUsel="add";
+            }
+            else if(instruction==SUB){
+                control_logic.ALUsel="sub";
+            }
+            else if(instruction==SLL){
+                control_logic.ALUsel="sll";
+            }if(instruction==ADD){
+                control_logic.ALUsel="add";
+            }
+            else if(instruction==SUB){
+                control_logic.ALUsel="sub";
+            }
+            else if(instruction==SLL){
+                control_logic.ALUsel="sll";
+            }
+            else if(instruction==SLT){
+                control_logic.ALUsel="slt";
+            }
+            else if(instruction==SLTU){
+                control_logic.ALUsel="sltu";
+            }
+            else if(instruction==XOR){
+                control_logic.ALUsel="xor";
+            }
+            else if(instruction==SRL){
+                control_logic.ALUsel="srl";
+            }
+            else if(instruction==SRA){
+                control_logic.ALUsel="sra";
+            }
+            else if(instruction==OR){
+                control_logic.ALUsel="or";
+            }
+            else if(instruction==AND){
+                control_logic.ALUsel="and";
+            }
+            else if(instruction==MUL){
+                control_logic.ALUsel="mul";
+            }
+            else if(instruction==DIV){
+                control_logic.ALUsel="div";
+            }
+            else if(instruction==REM){
+                control_logic.ALUsel="rem";
+            }
+            else if(instruction==SLT){
+                control_logic.ALUsel="slt";
+            }
+            else if(instruction==SLTU){
+                control_logic.ALUsel="sltu";
+            }
+            else if(instruction==XOR){
+                control_logic.ALUsel="xor";
+            }
+            else if(instruction==SRL){
+                control_logic.ALUsel="srl";
+            }
+            else if(instruction==SRA){
+                control_logic.ALUsel="sra";
+            }
+            else if(instruction==OR){
+                control_logic.ALUsel="or";
+            }
+            else if(instruction==AND){
+                control_logic.ALUsel="and";
+            }
+            else if(instruction==MUL){
+                control_logic.ALUsel="mul";
+            }
+            else if(instruction==DIV){
+                control_logic.ALUsel="div";
+            }
+            else if(instruction==REM){
+                control_logic.ALUsel="rem";
+            }
+        }
+        else if(instruction==ADDI||instruction==SLTI||instruction==SLTIU||instruction==XORI||
+            instruction==ORI||instruction==ANDI||instruction==SLLI||instruction==SRLI||instruction==SRAI||
+            instruction==LD||instruction==LB||instruction==LH||instruction==LW||instruction==LBU||
+            instruction==LHU){
+                //     ADDI,SLTI,SLTIU,XORI,ORI,ANDI,SLLI,SRLI,SRAI,LD,LB,LH,LW,LBU,LHU,
+                control_logic.pcSel=0;
+                control_logic.immSel="I"; 
+                control_logic.regWEn=1;
+                control_logic.brUn=0; //dont care
+                control_logic.brEq=0; //dont care
+                control_logic.brLt=0; //dont care
+                control_logic.Bsel=0;
+                control_logic.Asel=0;
+                control_logic.MemRW="read";
+                control_logic.WBsel=1;
+                if(instruction==ADDI){
+                    control_logic.ALUsel="add";
+                }
+                else if(instruction==SLTI){
+                    control_logic.ALUsel="slt";
+                }
+                else if(instruction==SLTIU){
+                    control_logic.ALUsel="sltu";
+                }
+                else if(instruction==XORI){
+                    control_logic.ALUsel="xor";
+                }
+                else if(instruction==ORI){
+                    control_logic.ALUsel="ow";
+                }
+                else if(instruction==ANDI){
+                    control_logic.ALUsel="and";
+                }
+                else if(instruction==SLLI){
+                    control_logic.ALUsel="sll";
+                }
+                else if(instruction==SRLI){
+                    control_logic.ALUsel="srl";
+                }
+                else if(instruction==SRAI){
+                    control_logic.ALUsel="sra";
+                }
+                else if(instruction==LD||instruction==LB||instruction==LH||instruction==LW||
+                    instruction==LBU||instruction==LHU){
+                    control_logic.ALUsel="add";
+                }
+            }
+            else if(instruction==SB||instruction==SH||instruction==SW||instruction==SD){
+                //     SB,SH,SW,SD,
+                control_logic.pcSel=0;
+                control_logic.immSel="S"; 
+                control_logic.regWEn=0;
+                control_logic.brUn=0; //dont care
+                control_logic.brEq=0; //dont care
+                control_logic.brLt=0; //dont care
+                control_logic.Bsel=1;
+                control_logic.Asel=0;
+                control_logic.ALUsel="add";
+                control_logic.MemRW="write";
+                control_logic.WBsel=1; //dont care
+            }
+            else if(instruction==BEQ||instruction==BNE||instruction==BLT||instruction==BLTU||
+                instruction==BGEU){
+                // BEQ,BNE,BGE,BLT,BLTU,BGEU,
+                // pcsel would be set later
+                //breq,brlt also to be set later
+                control_logic.pcSel=0; //initialise
+                control_logic.immSel="B"; 
+                control_logic.regWEn=0;
+                control_logic.brEq=0; //initialise
+                control_logic.brLt=0; //initialise
+                control_logic.Bsel=1;
+                control_logic.Asel=1;
+                control_logic.ALUsel="add";
+                control_logic.MemRW="read";
+                control_logic.WBsel=1; //dont care
+                if(instruction==BEQ){
+                    control_logic.brUn=0;
+                }
+                else if(instruction==BNE){
+                    control_logic.brUn=0;
+                }
+                else if(instruction==BLT){
+                    control_logic.brUn=0;                    
+                }
+                else if(instruction==BLTU){
+                    control_logic.brUn=1;                    
+                }
+                else if(instruction==BGEU){
+                    control_logic.brUn=1;                    
+                }
+            }
+            else if(instruction==LUI||instruction==AUIPC){
+                //     LUI,AUIPC,
+                control_logic.pcSel=0;
+                control_logic.immSel="U"; 
+                control_logic.regWEn=1;
+                control_logic.brUn=0; //dont care
+                control_logic.brEq=0; //dont care
+                control_logic.brLt=0; //dont care
+                control_logic.Bsel=1;
+                control_logic.Asel=0; //dont care
+                control_logic.MemRW="read";
+                control_logic.WBsel=1;
+                if(instruction==LUI){
+                    control_logic.ALUsel="B";
+                }
+                else if(instruction==AUIPC){
+                    control_logic.ALUsel="add";
+                }
+            }
+            else if(instruction==JALR||instruction==JAL){
+                //     JAL,JALR
+                control_logic.pcSel=1;
+                control_logic.regWEn=1;
+                control_logic.brUn=0; //dont care
+                control_logic.brEq=0; //dont care
+                control_logic.brLt=0; //dont care
+                control_logic.Bsel=1;
+                control_logic.Asel=0; 
+                control_logic.MemRW="read";
+                control_logic.WBsel=2;
+                control_logic.ALUsel="add";
+                if(instruction==JALR){
+                    control_logic.immSel="I";
+                }
+                else if(instruction==JAL){
+                    control_logic.immSel="J";
+                }
+            }
+}
+
+void Executor::applyControlLogic(){
+    m1.controlInputSignal=control_logic.pcSel;
+    imm_gen.controlInputSignal=control_logic.immSel;
+    reg_entry.controlInputSignal=control_logic.regWEn;
+    branch_comp.controlInputSignal=control_logic.brUn;
+    m2.controlInputSignal=control_logic.Asel;
+    m3.controlInputSignal=control_logic.Bsel;
+    alu.controlInputSignal=control_logic.ALUsel;
+    dmem.controlInputSignal=control_logic.MemRW;
+    m4.controlInputSignal=control_logic.WBsel;
+}
+
+void Executor::execueteALL(){
+    //OUTPUT->changes in dmem,imem and reg_entry||outputDataLines
+    while(pc!=endInstruction){
+        execueteInstruction();
+    }
+}
+
+void Executor::execueteInstruction(){
+
 }

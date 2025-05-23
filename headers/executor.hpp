@@ -3,10 +3,8 @@
 class Executor{
 public:
     std::string inputFilePath;
-    std::unordered_map<u_int32_t,u_int32_t> addressToTextInstructionMapping;
-    std::unordered_map<u_int32_t,u_int32_t> addressToDataMapping;
-    std::unordered_map<std::string,u_int32_t> registorToValueMapping;
     std::vector<std::string> outputDataLines;
+    u_int32_t endInstruction;
 
     //architecture
     twoMultiplexer m1;
@@ -23,15 +21,10 @@ public:
     threeMultiplexer m4;
     ControlLogic control_logic;
 
-    std::unordered_map<std::string,int> register_to_int_mapping;
-
     void inputFileParser();
-    void execuete();
-    void execueteRformatInstruction();
-    void execueteIformatInstruction();
-    void execueteSformatInstruction();
-    void execueteBformatInstruction();
-    void execueteUformatInstruction();
-    void execueteJformatInstruction();
+    void setupControlLogic(Instruction);
+    void applyControlLogic();
+    void execueteInstruction();
+    void execueteALL();
     Executor(std::string);
 };
